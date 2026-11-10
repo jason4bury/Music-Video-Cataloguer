@@ -1,105 +1,138 @@
+<p align="center">
+  <img src="assets/Music-Video-Cataloguer.png" alt="Music Video Cataloguer icon" width="128">
+</p>
+
 # Music Video Cataloguer
 
-A self-hosted web app for browsing, tagging, and playing a local music video
-collection. Node.js/Express backend, vanilla JS frontend, SQLite for
-metadata, ffmpeg for thumbnails/durations — all in one Docker container.
+A self-hosted web app for browsing, tagging and playing your music video collection, run in Docker.
 
-## Expected library layout
+![Version](https://img.shields.io/badge/version-v1.00-blue)
+![Platform](https://img.shields.io/badge/platform-Docker-2496ED?logo=docker&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-22-339933?logo=nodedotjs&logoColor=white)
+![Licence](https://img.shields.io/badge/licence-MIT-green)
+![Last commit](https://img.shields.io/github/last-commit/jason4bury/Music-Video-Cataloguer)
 
-```
-/videos/
-  Daft Punk/
-    Daft Punk - Around the World.mp4
-    Daft Punk - One More Time.mp4
-  Sia/
-    Sia - Chandelier.mp4
-```
+Music Video Cataloguer scans a folder of music videos (one subfolder per artist), reads each video's length and makes a thumbnail with ffmpeg, and keeps it all in a SQLite database. You search, filter, tag and play everything from a browser.
 
-One folder per artist. Filenames can either be `Artist - Title.mp4` or just
-`Title.mp4` — the folder name is always used as the artist; a matching
-`Artist - ` prefix in the filename is stripped automatically. Supported
-extensions: `.mp4 .mkv .avi .webm .mov .m4v`.
+## ✨ Features
 
-## Running it
+- **Library scanning**: picks up new, changed and removed videos on start-up and every hour (or whatever `SCAN_INTERVAL_MINUTES` says), with a progress bar in the sidebar. If the library folder is offline or empty, or an artist folder can't be read, its videos are kept (with a warning) rather than removed, so tags, favourites and playlists are never lost to an unplugged drive.
+- **Artist and title from the file name**: the folder name is the artist; a matching `Artist - ` at the start of the file name is dropped from the title.
+- **Thumbnails and lengths** from ffmpeg and ffprobe (included in the Docker image). A replaced or re-encoded video gets a new thumbnail on the next scan.
+- **Search and filters**: search by artist or title, filter by artist, tag, playlist or favourites, and sort by artist, title, recently added or length.
+- **Player**: streams in the browser with proper seeking. A video counts as watched after 5 seconds, or tick Watched yourself.
+- **Tags and favourites** on every video.
+- **Playlists**: create and delete them, add a video from the "+" on its thumbnail or from the player, and remove it again from the player while viewing that playlist.
+- **Sign-in**: one account from `.env`, sessions that survive a restart, and a lockout after 10 wrong passwords in 15 minutes.
+- **Health check**: `GET /healthz` for Docker, Portainer and uptime monitors.
 
-1. Copy `.env.example` to `.env` and fill in your library path, configs
-   path, and login credentials.
-2. Pull and start:
-   ```bash
+## 📋 Requirements
+
+- Docker with Docker Compose v2 (Docker Desktop on Windows, or Docker Engine on Linux or a NAS)
+- Your music video folder reachable from the Docker host, laid out as one folder per artist:
+
+  ```
+  Music Videos/
+    Daft Punk/
+      Daft Punk - Around the World.mp4
+      One More Time.mp4
+    Sia/
+      Sia - Chandelier.mp4
+  ```
+
+  Supported types: `.mp4`, `.m4v`, `.mkv`, `.webm`, `.mov` and `.avi`. Videos in deeper subfolders are not picked up. Browsers play MP4 (H.264) and WebM best; MKV, MOV and AVI depend on the browser and codec.
+- To run without Docker: Node.js 22 or later, and ffmpeg on the PATH
+
+## 📦 Installation
+
+1. Download or clone this repository onto the Docker host.
+2. Copy `.env.example` to `.env` and set at least `LIBRARY_HOST_DIR` (your music video folder) and `AUTH_PASSWORD` (see Configuration below).
+3. Start it from the repository folder:
+
+   ```
    docker compose up -d
    ```
-   This pulls the published image (`jason4bury/music-video-cataloguer` on
-   Docker Hub) — no local build needed. If you'd rather build from source
-   instead, swap the `image:` line in `docker-compose.yml` for `build: .`.
-3. Open `http://<your-server>:<APP_PORT>` and sign in.
 
-On first start the app scans the whole library, generating a thumbnail and
-reading the duration for every video with ffmpeg/ffprobe (bundled in the
-image). A progress bar appears in the sidebar while this runs — progress is
-also visible in `docker compose logs -f`. After that, it rescans every hour
-by default (`SCAN_INTERVAL_MINUTES`).
+   This pulls `jason4bury/music-video-cataloguer` from Docker Hub. To build the image from the source instead, run `docker compose up -d --build`.
+4. Open `http://<your-server>:3001` (or the `PORT` you set) and sign in. The first scan starts on its own.
 
-## Login
+If you left `AUTH_PASSWORD` blank, the generated password is in `docker compose logs music-video-cataloguer`. It's only shown on the very first start.
 
-The app is gated behind a single login screen. On the very first start it
-creates one account from the `AUTH_USERNAME`/`AUTH_PASSWORD` in your `.env`
-(defaults to `admin` / whatever you set there). Leave `AUTH_PASSWORD` blank
-and a random one is generated and printed once to `docker compose logs` —
-check there if you forget it. There's currently no in-app way to change the
-password; edit `.env` and delete the `users` row from your data folder's
-`catalogue.db` (or delete the whole data folder to start fresh) to reset it.
+**Updating:** `docker compose pull` then `docker compose up -d`. Tags, favourites and playlists are kept.
 
-Sessions are kept in memory, so restarting the container signs everyone
-out. Set `SESSION_SECRET` to a fixed random string if you'd rather sessions
-survive restarts (they'll still expire after 30 days either way).
+## 🚀 Usage
 
-## Data persistence
+- Click a video to play it. Favourite, Watched, tags and "Add to playlist" are under the player.
+- The **+** on a thumbnail adds the video to a playlist without opening it.
+- Click an artist, tag or playlist in the sidebar to filter; click the artist or tag again to clear it.
+- **About** shows the version, licence and a link to this repository.
 
-The SQLite database and generated thumbnails live in `/data` inside the
-container, mapped to a host folder by the compose file. Back that folder up
-if you've spent time tagging/playlisting — it's the only state that isn't
-derived from your video files.
+### If a scan finds no videos
 
-## Features
+The app can't see anything at the path you gave it. Check the mount from inside the container:
 
-- Auto-scanning library import with metadata parsed from folder/filename,
-  with a live progress bar during scans
-- Thumbnail + duration extraction via ffmpeg
-- Search by artist/title, filter by artist or tag, favorites-only toggle
-- Sort by artist, title, date added, or duration
-- Tagging, favoriting, and watched-status tracking
-- Playlists: create, delete, add/remove videos (including a quick "+"
-  button right on each thumbnail), filter grid by playlist
-- Range-request video streaming (scrubbing works properly in the browser)
-- Login screen gating the whole app
+```
+docker compose exec music-video-cataloguer ls -la /videos
+```
 
-## Configuration
+If that's empty, check `LIBRARY_HOST_DIR` in `.env`. On Windows with Docker Desktop's older Hyper-V backend, also check the drive is shared under Settings > Resources > File sharing (the WSL 2 backend shares all drives).
 
-Set these in `.env` (see `.env.example`) — they configure the host side of
-`docker-compose.yml`. There are no built-in fallbacks for the path/port
-variables, so they need a real value in `.env`:
+## ⚙️ Configuration
 
-| Variable | Example | Purpose |
-|---|---|---|
-| `LIBRARY_PATH` | *(required)* | Host folder containing your artist subfolders |
-| `CONFIGS` | *(required)* | Host folder for app configs — this app's data/thumbnails land in `<CONFIGS>/music-video-cataloguer` |
-| `APP_PORT` | `3001` | Port the app is reachable on |
-| `SCAN_INTERVAL_MINUTES` | `60` | Periodic rescan interval; `0` disables it (blank also disables it) |
-| `AUTH_USERNAME` | `admin` | Login username, set on first start only (blank falls back to `admin`) |
-| `AUTH_PASSWORD` | `changeme` | Login password, set on first start only — leave blank to have one generated and printed to logs |
-| `SESSION_SECRET` | *(blank)* | Optional — set this to keep sessions alive across restarts |
+All settings live in `.env` next to `docker-compose.yml`. `.env` is gitignored; `.env.example` shows every setting.
 
-These are separate from the container's own internal env vars
-(`LIBRARY_PATH=/videos`, `DATA_DIR=/data`, etc., set in the `Dockerfile`),
-which you shouldn't need to touch.
+| Setting | Required | What it does |
+| --- | --- | --- |
+| `PORT` | | Port on the host (default `3001`) |
+| `MUSIC_VIDEO_CATALOGUER_TAG` | | Image tag to run: `latest` (default) or a version such as `1.00` |
+| `LIBRARY_HOST_DIR` | Yes | Your music video folder on the host, mounted read-only |
+| `DATA_HOST_DIR` | | Host folder for the database and thumbnails. Blank uses the `music-video-cataloguer-data` Docker volume |
+| `SCAN_INTERVAL_MINUTES` | | Rescan interval in minutes (default `60`); `0` turns it off |
+| `AUTH_USERNAME` | | Sign-in username (default `admin`) |
+| `AUTH_PASSWORD` | | Sign-in password, at least 8 characters. Blank generates one on the first start |
+| `SESSION_SECRET` | | Random string of 32+ characters that signs session cookies. Blank generates one and keeps it in the database |
+| `TRUST_PROXY` | | `true` behind a reverse proxy, so the lockout sees real client addresses |
 
-## Notes
+The account always matches `.env`: change `AUTH_USERNAME` or `AUTH_PASSWORD` and restart the container to change it in the app (everyone is signed out). The app refuses to start with an example password such as `changeme`, and says why in `docker compose logs music-video-cataloguer`.
 
-- The library volume is mounted read-only (`:ro`) — the app never modifies
-  or deletes your video files, only its own database.
-- Deleting or moving a file from the library and rescanning removes it (and
-  its thumbnail) from the catalogue automatically.
+### Where data is stored
 
-## License
+The database (`catalogue.db`: videos, tags, favourites, watched status, playlists and sessions) and the `thumbnails` folder are in the container's `/data` folder, which is the `music-video-cataloguer-data` Docker volume, or `DATA_HOST_DIR` if you set it. It survives rebuilds and updates. Back it up if you've spent time tagging: it's the only thing that can't be rebuilt from your video files. The app never writes to your video folder.
 
-MIT — see [LICENSE](LICENSE). See [CHANGELOG.md](CHANGELOG.md) for release history.
+### Putting it on the internet
+
+- Put it behind a reverse proxy with HTTPS (Nginx Proxy Manager, Caddy, Traefik, Synology) rather than forwarding the port from your router, and set `TRUST_PROXY=true`. The session cookie is marked secure automatically over HTTPS.
+- Use a strong `AUTH_PASSWORD`.
+- If you only need it yourself, a WireGuard or Tailscale tunnel avoids exposing it at all.
+
+### Running without Docker
+
+Install Node.js 22+ and ffmpeg, run `npm ci --omit=dev`, set `LIBRARY_PATH` and `DATA_DIR` in `.env` to real folders on that machine, and start it with `npm start` (it reads `.env` itself). It listens on port `3211` unless you set `PORT`.
+
+### Project layout
+
+```
+server/
+  index.js               Express app, start-up checks, sessions, security headers
+  auth.js                sign-in account, sign-in and lockout
+  db.js                  SQLite schema
+  scanner.js             scans the library, ffprobe lengths and ffmpeg thumbnails
+  sqliteSessionStore.js  keeps sessions in SQLite
+  version.js             shows package.json's version as v1.00
+  routes/videos.js       videos, artists, tags, streaming and scan endpoints
+  routes/playlists.js    playlist endpoints
+  routes/mime.js         video content types
+public/                  the browser app (index.html, login.html, app.js, style.css, icons)
+assets/                  icon and README image
+docs/                    history before v1.00
+```
+
+Run `npm run lint` (ESLint) before committing.
+
+## 📝 Changelog
+
+See [CHANGELOG.md](CHANGELOG.md). Changes before v1.00 are in [docs/HISTORY-before-1.00.md](docs/HISTORY-before-1.00.md).
+
+## 📄 Licence
+
+MIT, see [LICENSE](LICENSE). Copyright (c) 2026 Jason Rhodes.

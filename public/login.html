@@ -3,7 +3,9 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Sign in — Music Video Cataloguer</title>
+<title>Sign in: Music Video Cataloguer</title>
+<link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
 <style>
   :root {
     --bg: #15130f;
@@ -47,6 +49,8 @@
     color: var(--amber);
     margin: 0 0 4px;
   }
+  .logo { display: block; margin: 0 auto 14px; }
+  h1, p.sub { text-align: center; }
   p.sub { color: var(--text-dim); font-size: 12.5px; margin: 0 0 22px; }
   label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 5px; }
   input {
@@ -82,7 +86,8 @@
 </head>
 <body>
   <div class="card">
-    <h1>🎬 Music Videos</h1>
+    <img class="logo" src="apple-touch-icon.png" alt="" width="72" height="72" />
+    <h1>Music Video Cataloguer</h1>
     <p class="sub">Sign in to view your collection</p>
     <div id="error"></div>
     <form id="loginForm">
@@ -99,7 +104,9 @@
     const errorBox = document.getElementById('error');
     const submitBtn = document.getElementById('submitBtn');
     const params = new URLSearchParams(location.search);
-    const redirectTo = params.get('redirect') && params.get('redirect').startsWith('/') ? params.get('redirect') : '/';
+    // Only follow a redirect back into this app: a path starting with one "/", not "//host" or "/\host".
+    const wanted = params.get('redirect') || '';
+    const redirectTo = /^\/(?![/\\])/.test(wanted) ? wanted : '/';
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();

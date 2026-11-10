@@ -4,17 +4,20 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Music Video Cataloguer</title>
+<link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div id="app">
     <header class="topbar">
-      <h1>🎬 Music Videos</h1>
+      <h1><img src="icon-64.png" alt="" width="28" height="28" />Music Video Cataloguer</h1>
       <div class="search-wrap">
         <input id="search" type="search" placeholder="Search artist or title…" autocomplete="off" />
       </div>
       <div class="topbar-actions">
-        <button id="favToggle" class="chip-toggle" title="Show only favorites">★ Favorites</button>
+        <button id="favToggle" class="chip-toggle" title="Show only favourites" aria-pressed="false">★ Favourites</button>
+        <button id="aboutBtn" title="About Music Video Cataloguer">About</button>
         <button id="logoutBtn" title="Sign out">⏻ Sign out</button>
       </div>
     </header>
@@ -27,8 +30,8 @@
             <li data-playlist="" class="active">All Videos</li>
           </ul>
           <form id="newPlaylistForm" class="inline-form">
-            <input id="newPlaylistName" placeholder="New playlist…" required />
-            <button type="submit">+</button>
+            <input id="newPlaylistName" placeholder="New playlist…" maxlength="80" aria-label="New playlist name" required />
+            <button type="submit" title="Create playlist">+</button>
           </form>
         </section>
 
@@ -49,6 +52,8 @@
           </div>
           <p id="scanProgressLabel" class="scan-progress-label"></p>
         </section>
+
+        <p id="scanWarning" class="scan-warning hidden"></p>
       </aside>
 
       <main>
@@ -72,7 +77,7 @@
 
   <div id="playerModal" class="modal hidden">
     <div class="modal-content">
-      <button id="closeModal" class="modal-close">✕</button>
+      <button id="closeModal" class="modal-close" title="Close" aria-label="Close">✕</button>
       <video id="player" controls></video>
       <div class="modal-info">
         <div class="modal-title-row">
@@ -81,14 +86,14 @@
             <p id="modalArtist" class="modal-artist"></p>
           </div>
           <div class="modal-buttons">
-            <button id="modalFav" class="chip-toggle">★ Favorite</button>
+            <button id="modalFav" class="chip-toggle">★ Favourite</button>
             <button id="modalWatched" class="chip-toggle">✓ Watched</button>
           </div>
         </div>
         <div class="tag-editor">
           <div id="modalTags" class="tag-list"></div>
           <form id="addTagForm" class="inline-form">
-            <input id="addTagInput" placeholder="Add tag…" />
+            <input id="addTagInput" placeholder="Add tag…" maxlength="40" aria-label="New tag" />
             <button type="submit">Add</button>
           </form>
         </div>
@@ -98,8 +103,23 @@
             <select id="playlistSelect"></select>
           </label>
           <button id="addToPlaylistBtn">Add</button>
+          <span id="playlistAddStatus" class="playlist-add-status" role="status"></span>
+          <button id="removeFromPlaylistBtn" class="hidden"></button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div id="aboutModal" class="modal hidden">
+    <div class="modal-content about-content" role="dialog" aria-modal="true" aria-labelledby="aboutTitle">
+      <button id="closeAbout" class="modal-close" title="Close" aria-label="Close">✕</button>
+      <img src="apple-touch-icon.png" alt="" width="96" height="96" />
+      <h2 id="aboutTitle">Music Video Cataloguer</h2>
+      <p id="aboutVersion" class="about-version"></p>
+      <p>Self-hosted cataloguer and player for a local music video collection.</p>
+      <p id="aboutCopyright"></p>
+      <p>Released under the MIT licence.</p>
+      <p><a id="aboutLink" href="#" target="_blank" rel="noopener noreferrer"></a></p>
     </div>
   </div>
 

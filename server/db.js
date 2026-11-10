@@ -10,6 +10,9 @@ fs.mkdirSync(THUMB_DIR, { recursive: true });
 
 const db = new Database(path.join(DATA_DIR, 'catalogue.db'));
 db.pragma('journal_mode = WAL');
+// better-sqlite3 turns foreign keys on by default; set it explicitly because the playlist and tag
+// tables rely on ON DELETE CASCADE.
+db.pragma('foreign_keys = ON');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS videos (
@@ -49,8 +52,22 @@ db.exec(`
     PRIMARY KEY (playlist_id, video_id)
   );
 
+  -- Sign-in sessions, so a container restart doesn't sign everyone out.
+  CREATE TABLE IF NOT EXISTS sessions (
+    sid TEXT PRIMARY KEY,
+    expires INTEGER,
+    data TEXT NOT NULL
+  );
+
+  -- Small key/value store for app settings (currently the generated session secret).
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+
   CREATE INDEX IF NOT EXISTS idx_videos_artist ON videos(artist);
   CREATE INDEX IF NOT EXISTS idx_videos_title ON videos(title);
+  CREATE INDEX IF NOT EXISTS idx_video_tags_tag ON video_tags(tag_id);
 `);
 
 module.exports = { db, DATA_DIR, THUMB_DIR };

@@ -1,25 +1,37 @@
+# Music Video Cataloguer. Every ${VALUE} below comes from your .env file (copy .env.example to
+# .env), so .env is normally the only file you edit.
+#
+#   docker compose up -d            pulls jason4bury/music-video-cataloguer from Docker Hub and starts it
+#   docker compose up -d --build    builds the image from this folder instead
 services:
   music-video-cataloguer:
-    image: jason4bury/music-video-cataloguer
-#    image: music-video-cataloguer
+    image: jason4bury/music-video-cataloguer:${MUSIC_VIDEO_CATALOGUER_TAG:-latest}
+    build: .
     container_name: music-video-cataloguer
     environment:
-      - SCAN_ON_START=true
-      # Rescan automatically every N minutes; set to 0 to disable
-      - SCAN_INTERVAL_MINUTES=${SCAN_INTERVAL_MINUTES}
-      # Login credentials, created on first start only. If AUTH_PASSWORD
-      # is left blank, a random one is generated and printed once to
-      # `docker compose logs` — check there if you forget it.
-      - AUTH_USERNAME=${AUTH_USERNAME}
-      - AUTH_PASSWORD=${AUTH_PASSWORD}
-      # Optional: pin this so sessions survive a container restart.
-      - SESSION_SECRET=${SESSION_SECRET}
+      PORT: 3211
+      LIBRARY_PATH: /videos
+      DATA_DIR: /data
+      SCAN_ON_START: "true"
+      # Rescan every N minutes; 0 turns it off.
+      SCAN_INTERVAL_MINUTES: ${SCAN_INTERVAL_MINUTES:-60}
+      # Sign-in account. If AUTH_PASSWORD is blank, a password is generated on the very first
+      # start and printed once to `docker compose logs`.
+      AUTH_USERNAME: ${AUTH_USERNAME:-admin}
+      AUTH_PASSWORD: ${AUTH_PASSWORD:-}
+      # Optional: blank means a secret is generated and kept in the database.
+      SESSION_SECRET: ${SESSION_SECRET:-}
+      # true when it sits behind a reverse proxy, so the sign-in lockout sees real addresses.
+      TRUST_PROXY: ${TRUST_PROXY:-false}
     volumes:
-      # Persists the SQLite database and generated thumbnails
-      - ${CONFIGS}/music-video-cataloguer:/data
-      # Point this at the folder that contains one subfolder per artist,
-      # e.g. /videos/Daft Punk/Daft Punk - Around the World.mp4
-      - ${LIBRARY_PATH}:/videos:ro
+      # Database, thumbnails and sessions. A named Docker volume by default; set DATA_HOST_DIR in
+      # .env to keep them in a folder on the host instead.
+      - ${DATA_HOST_DIR:-music-video-cataloguer-data}:/data
+      # Your videos, one subfolder per artist. Read-only: the app never changes them.
+      - ${LIBRARY_HOST_DIR:?Set LIBRARY_HOST_DIR in .env to your music video folder}:/videos:ro
     ports:
-      - ${APP_PORT}:3211
+      - "${PORT:-3001}:3211"
     restart: unless-stopped
+
+volumes:
+  music-video-cataloguer-data:

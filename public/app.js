@@ -38,6 +38,15 @@
     playlistSelect: document.getElementById('playlistSelect'),
     addToPlaylistBtn: document.getElementById('addToPlaylistBtn'),
     logoutBtn: document.getElementById('logoutBtn'),
+    scanWarning: document.getElementById('scanWarning'),
+    playlistAddStatus: document.getElementById('playlistAddStatus'),
+    removeFromPlaylistBtn: document.getElementById('removeFromPlaylistBtn'),
+    aboutBtn: document.getElementById('aboutBtn'),
+    aboutModal: document.getElementById('aboutModal'),
+    closeAbout: document.getElementById('closeAbout'),
+    aboutVersion: document.getElementById('aboutVersion'),
+    aboutCopyright: document.getElementById('aboutCopyright'),
+    aboutLink: document.getElementById('aboutLink'),
   };
 
   let debounceTimer = null;
@@ -65,9 +74,19 @@
       location.href = '/login?redirect=' + encodeURIComponent(location.pathname);
       throw new Error('unauthorized');
     }
-    if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      const err = new Error(data.error || `Request failed: ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
     if (res.status === 204) return null;
     return res.json();
+  }
+
+  // Shows a failed request instead of leaving the click silently doing nothing.
+  function reportError(err) {
+    if (err && err.message !== 'unauthorized') alert(`Something went wrong: ${err.message}`);
   }
 
   function buildQuery() {
@@ -81,9 +100,13 @@
     return params.toString();
   }
 
+  // Typing quickly fires several searches; only the newest one is drawn, so a slow earlier reply
+  // can't overwrite it.
+  let loadSeq = 0;
   async function loadVideos() {
+    const seq = ++loadSeq;
     const videos = await api(`/videos?${buildQuery()}`);
-    renderGrid(videos);
+    if (seq === loadSeq) renderGrid(videos);
   }
 
   function renderGrid(videos) {
@@ -103,7 +126,7 @@
 
   function cardHtml(v) {
     const thumb = v.thumbnail
-      ? `<img src="${v.thumbnail}" alt="" loading="lazy" />`
+      ? `<img src="${escapeHtml(v.thumbnail)}" alt="" loading="lazy" />`
       : `<div class="noimg">🎵</div>`;
     const tags = v.tags.slice(0, 3).map((t) => `<span>${escapeHtml(t)}</span>`).join('');
     return `
@@ -112,7 +135,7 @@
           ${thumb}
           ${v.favorite ? '<div class="fav-badge">★</div>' : ''}
           ${v.duration ? `<div class="duration-badge">${formatDuration(v.duration)}</div>` : ''}
-          <button class="add-playlist-btn" data-id="${v.id}" title="Add to playlist">+</button>
+          <button class="add-playlist-btn" data-id="${v.id}" title="Add to playlist" aria-label="Add to playlist">+</button>
           <div class="play-badge">▶</div>
         </div>
         <div class="card-body">
@@ -123,10 +146,10 @@
       </div>`;
   }
 
+  // Safe for text and for attribute values (quotes included), so an artist folder or tag with
+  // a " in it can't break out of a data-* attribute.
   function escapeHtml(str) {
-    const d = document.createElement('div');
-    d.textContent = str ?? '';
-    return d.innerHTML;
+    return String(str ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   }
 
   async function loadSidebar() {
@@ -147,7 +170,7 @@
           (p) =>
             `<li data-playlist="${p.id}" class="${String(state.playlist) === String(p.id) ? 'active' : ''}">
               <span class="playlist-name">${escapeHtml(p.name)} <span class="count">${p.count}</span></span>
-              <button class="playlist-delete" data-playlist-id="${p.id}" data-playlist-name="${escapeHtml(p.name)}" title="Delete playlist">✕</button>
+              <button class="playlist-delete" data-playlist-id="${p.id}" data-playlist-name="${escapeHtml(p.name)}" title="Delete playlist" aria-label="Delete playlist ${escapeHtml(p.name)}">✕</button>
             </li>`
         )
         .join('');
@@ -178,7 +201,11 @@
         const name = btn.dataset.playlistName;
         if (!confirm(`Delete playlist "${name}"? The videos themselves won't be affected.`)) return;
         const id = btn.dataset.playlistId;
-        await api(`/playlists/${id}`, { method: 'DELETE' });
+        try {
+          await api(`/playlists/${id}`, { method: 'DELETE' });
+        } catch (err) {
+          return reportError(err);
+        }
         if (String(state.playlist) === String(id)) state.playlist = '';
         refresh();
       })
@@ -186,8 +213,8 @@
   }
 
   function refresh() {
-    loadVideos();
-    loadSidebar();
+    loadVideos().catch(reportError);
+    loadSidebar().catch(reportError);
   }
 
   // ---------- Quick "add to playlist" popover on card thumbnails ----------
@@ -217,12 +244,17 @@
         btn.addEventListener('click', async (e) => {
           e.stopPropagation();
           btn.disabled = true;
+          try {
+            await api(`/playlists/${btn.dataset.playlistId}/videos`, {
+              method: 'POST',
+              body: JSON.stringify({ videoId }),
+            });
+          } catch (err) {
+            btn.disabled = false;
+            return reportError(err);
+          }
           btn.textContent = 'Added ✓';
-          await api(`/playlists/${btn.dataset.playlistId}/videos`, {
-            method: 'POST',
-            body: JSON.stringify({ videoId }),
-          });
-          loadSidebar();
+          refresh();
           setTimeout(closePlaylistPopover, 400);
         })
       );
@@ -244,42 +276,69 @@
   });
 
   // ---------- Modal / player ----------
+  // A video counts as watched once it has played for 5 seconds. One listener for the whole page,
+  // so closing a video early can't mark it watched later while a different one plays.
+  let autoMarkWatched = false;
+  el.player.addEventListener('timeupdate', () => {
+    if (!autoMarkWatched || el.player.currentTime <= 5 || !state.currentVideoId) return;
+    autoMarkWatched = false;
+    setWatched(state.currentVideoId, true).catch(reportError);
+  });
+
+  async function setWatched(id, watched) {
+    await api(`/videos/${id}`, { method: 'PATCH', body: JSON.stringify({ watched }) });
+    if (state.currentVideoId === id) setPressed(el.modalWatched, watched);
+  }
+
+  function setPressed(btn, on) {
+    btn.classList.toggle('active', on);
+    btn.setAttribute('aria-pressed', String(on));
+  }
+
   async function openPlayer(id) {
-    const v = await api(`/videos/${id}`);
+    let v;
+    try {
+      v = await api(`/videos/${id}`);
+    } catch (err) {
+      return reportError(err);
+    }
     state.currentVideoId = id;
+    autoMarkWatched = !v.watched;
     el.player.src = `/api/videos/${id}/stream`;
     el.modalTitle.textContent = v.title;
     el.modalArtist.textContent = v.artist;
-    el.modalFav.classList.toggle('active', v.favorite);
-    el.modalWatched.classList.toggle('active', v.watched);
+    setPressed(el.modalFav, v.favorite);
+    setPressed(el.modalWatched, v.watched);
     renderModalTags(v.tags);
+    el.playlistAddStatus.textContent = '';
+    updateRemoveFromPlaylist(v.playlists || []);
     el.modal.classList.remove('hidden');
+    el.closeModal.focus();
+  }
 
-    if (!v.watched) {
-      el.player.addEventListener(
-        'timeupdate',
-        function markWatched() {
-          if (el.player.currentTime > 5) {
-            api(`/videos/${id}`, { method: 'PATCH', body: JSON.stringify({ watched: true }) });
-            el.modalWatched.classList.add('active');
-            el.player.removeEventListener('timeupdate', markWatched);
-          }
-        }
-      );
-    }
+  // When the grid is showing a playlist, the player offers to take the video out of it again.
+  function updateRemoveFromPlaylist(videoPlaylists) {
+    const current = state.playlists.find((p) => String(p.id) === String(state.playlist));
+    const show = current && videoPlaylists.some((pid) => String(pid) === String(current.id));
+    el.removeFromPlaylistBtn.classList.toggle('hidden', !show);
+    if (show) el.removeFromPlaylistBtn.textContent = `Remove from "${current.name}"`;
   }
 
   function renderModalTags(tags) {
     el.modalTags.innerHTML = tags
-      .map((t) => `<span>${escapeHtml(t)} <button data-tag="${escapeHtml(t)}" title="Remove tag">✕</button></span>`)
+      .map((t) => `<span>${escapeHtml(t)} <button data-tag="${escapeHtml(t)}" title="Remove tag" aria-label="Remove tag ${escapeHtml(t)}">✕</button></span>`)
       .join('');
     el.modalTags.querySelectorAll('button').forEach((btn) =>
       btn.addEventListener('click', async () => {
-        const v = await api(`/videos/${state.currentVideoId}`);
-        const newTags = v.tags.filter((t) => t !== btn.dataset.tag);
-        const updated = await api(`/videos/${state.currentVideoId}`, { method: 'PATCH', body: JSON.stringify({ tags: newTags }) });
-        renderModalTags(updated.tags);
-        loadSidebar();
+        try {
+          const v = await api(`/videos/${state.currentVideoId}`);
+          const newTags = v.tags.filter((t) => t !== btn.dataset.tag);
+          const updated = await api(`/videos/${state.currentVideoId}`, { method: 'PATCH', body: JSON.stringify({ tags: newTags }) });
+          renderModalTags(updated.tags);
+          loadSidebar().catch(reportError);
+        } catch (err) {
+          reportError(err);
+        }
       })
     );
   }
@@ -287,8 +346,13 @@
   function closePlayer() {
     el.modal.classList.add('hidden');
     el.player.pause();
-    el.player.src = '';
-    loadVideos();
+    // removeAttribute + load() stops the download; setting src to '' makes the browser request
+    // the page itself as a video.
+    el.player.removeAttribute('src');
+    el.player.load();
+    state.currentVideoId = null;
+    autoMarkWatched = false;
+    refresh();
   }
 
   el.closeModal.addEventListener('click', closePlayer);
@@ -296,38 +360,93 @@
     if (e.target === el.modal) closePlayer();
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !el.modal.classList.contains('hidden')) closePlayer();
+    if (e.key !== 'Escape') return;
+    if (!el.aboutModal.classList.contains('hidden')) closeAbout();
+    else if (!el.modal.classList.contains('hidden')) closePlayer();
   });
 
   el.modalFav.addEventListener('click', async () => {
     const active = !el.modalFav.classList.contains('active');
-    await api(`/videos/${state.currentVideoId}`, { method: 'PATCH', body: JSON.stringify({ favorite: active }) });
-    el.modalFav.classList.toggle('active', active);
+    try {
+      await api(`/videos/${state.currentVideoId}`, { method: 'PATCH', body: JSON.stringify({ favorite: active }) });
+      setPressed(el.modalFav, active);
+    } catch (err) {
+      reportError(err);
+    }
   });
 
-  el.modalWatched.addEventListener('click', async () => {
+  el.modalWatched.addEventListener('click', () => {
     const active = !el.modalWatched.classList.contains('active');
-    await api(`/videos/${state.currentVideoId}`, { method: 'PATCH', body: JSON.stringify({ watched: active }) });
-    el.modalWatched.classList.toggle('active', active);
+    // Ticking or unticking by hand overrides the automatic "watched after 5 seconds".
+    autoMarkWatched = false;
+    setWatched(state.currentVideoId, active).catch(reportError);
   });
 
   el.addTagForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const val = el.addTagInput.value.trim();
     if (!val) return;
-    const v = await api(`/videos/${state.currentVideoId}`);
-    const newTags = [...new Set([...v.tags, val])];
-    const updated = await api(`/videos/${state.currentVideoId}`, { method: 'PATCH', body: JSON.stringify({ tags: newTags }) });
-    renderModalTags(updated.tags);
-    el.addTagInput.value = '';
-    loadSidebar();
+    try {
+      const v = await api(`/videos/${state.currentVideoId}`);
+      const newTags = [...new Set([...v.tags, val])];
+      const updated = await api(`/videos/${state.currentVideoId}`, { method: 'PATCH', body: JSON.stringify({ tags: newTags }) });
+      renderModalTags(updated.tags);
+      el.addTagInput.value = '';
+      loadSidebar().catch(reportError);
+    } catch (err) {
+      reportError(err);
+    }
   });
 
   el.addToPlaylistBtn.addEventListener('click', async () => {
     const playlistId = el.playlistSelect.value;
     if (!playlistId || !state.currentVideoId) return;
-    await api(`/playlists/${playlistId}/videos`, { method: 'POST', body: JSON.stringify({ videoId: state.currentVideoId }) });
-    loadSidebar();
+    try {
+      await api(`/playlists/${playlistId}/videos`, { method: 'POST', body: JSON.stringify({ videoId: state.currentVideoId }) });
+    } catch (err) {
+      return reportError(err);
+    }
+    const name = el.playlistSelect.selectedOptions[0]?.textContent || 'playlist';
+    el.playlistAddStatus.textContent = `Added to ${name} ✓`;
+    loadSidebar().catch(reportError);
+  });
+
+  el.removeFromPlaylistBtn.addEventListener('click', async () => {
+    if (!state.playlist || !state.currentVideoId) return;
+    try {
+      await api(`/playlists/${state.playlist}/videos/${state.currentVideoId}`, { method: 'DELETE' });
+    } catch (err) {
+      return reportError(err);
+    }
+    el.removeFromPlaylistBtn.classList.add('hidden');
+    el.playlistAddStatus.textContent = 'Removed from this playlist ✓';
+  });
+
+  // ---------- About ----------
+  let aboutLoaded = false;
+  async function openAbout() {
+    if (!aboutLoaded) {
+      try {
+        const about = await api('/about');
+        el.aboutVersion.textContent = `v${about.version}`;
+        el.aboutCopyright.textContent = about.copyright;
+        el.aboutLink.href = about.homepage;
+        el.aboutLink.textContent = about.homepage.replace(/^https?:\/\//, '');
+        aboutLoaded = true;
+      } catch (err) {
+        return reportError(err);
+      }
+    }
+    el.aboutModal.classList.remove('hidden');
+    el.closeAbout.focus();
+  }
+  function closeAbout() {
+    el.aboutModal.classList.add('hidden');
+  }
+  el.aboutBtn.addEventListener('click', openAbout);
+  el.closeAbout.addEventListener('click', closeAbout);
+  el.aboutModal.addEventListener('click', (e) => {
+    if (e.target === el.aboutModal) closeAbout();
   });
 
   // ---------- Top controls ----------
@@ -335,24 +454,26 @@
     'input',
     debounce((e) => {
       state.q = e.target.value.trim();
-      loadVideos();
+      loadVideos().catch(reportError);
     }, 250)
   );
 
   el.favToggle.addEventListener('click', () => {
     state.favoritesOnly = !state.favoritesOnly;
-    el.favToggle.classList.toggle('active', state.favoritesOnly);
-    loadVideos();
+    setPressed(el.favToggle, state.favoritesOnly);
+    loadVideos().catch(reportError);
   });
 
   el.sortSelect.addEventListener('change', (e) => {
     state.sort = e.target.value;
-    loadVideos();
+    loadVideos().catch(reportError);
   });
 
   let wasScanning = false;
 
   function updateScanUI(status) {
+    el.scanWarning.textContent = status.warning ? `⚠ Last scan: ${status.warning}.` : '';
+    el.scanWarning.classList.toggle('hidden', !status.warning || status.running);
     if (!status.running) {
       el.scanSection.classList.add('hidden');
       return;
@@ -400,9 +521,10 @@
     try {
       await api('/playlists', { method: 'POST', body: JSON.stringify({ name }) });
       el.newPlaylistName.value = '';
-      loadSidebar();
-    } catch {
-      alert('A playlist with that name already exists.');
+      loadSidebar().catch(reportError);
+    } catch (err) {
+      if (err.status === 409) alert('A playlist with that name already exists.');
+      else reportError(err);
     }
   });
 
