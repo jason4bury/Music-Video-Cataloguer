@@ -26,6 +26,10 @@ Music Video Cataloguer scans a folder of music videos (one subfolder per artist)
 - **Sign-in**: one account from `.env`, sessions that survive a restart, and a lockout after 10 wrong passwords in 15 minutes.
 - **Health check**: `GET /healthz` for Docker, Portainer and uptime monitors.
 
+## 🖼️ Screenshots
+
+![Music Video Cataloguer main screen](docs/screenshots/main-window.png)
+
 ## 📋 Requirements
 
 - Docker with Docker Compose v2 (Docker Desktop on Windows, or Docker Engine on Linux or a NAS)
