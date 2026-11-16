@@ -1,37 +1,26 @@
-# Music Video Cataloguer. Every ${VALUE} below comes from your .env file (copy .env.example to
-# .env), so .env is normally the only file you edit.
-#
-#   docker compose up -d            pulls jason4bury/music-video-cataloguer from Docker Hub and starts it
-#   docker compose up -d --build    builds the image from this folder instead
 services:
+
   music-video-cataloguer:
-    image: jason4bury/music-video-cataloguer:${MUSIC_VIDEO_CATALOGUER_TAG:-latest}
-    build: .
+    image: jason4bury/music-video-cataloguer
     container_name: music-video-cataloguer
+    labels:
+      - home.group=Music
+    # App settings come from E:\Docker_PC\env\music-video-cataloguer\.env:
+    # SCAN_INTERVAL_MINUTES, AUTH_USERNAME, AUTH_PASSWORD, SESSION_SECRET, TRUST_PROXY.
+    env_file:
+      - ${ENV}/music-video-cataloguer/.env
+    # Fixed container-side values. These override anything with the same name in the
+    # .env file.
     environment:
       PORT: 3211
       LIBRARY_PATH: /videos
       DATA_DIR: /data
       SCAN_ON_START: "true"
-      # Rescan every N minutes; 0 turns it off.
-      SCAN_INTERVAL_MINUTES: ${SCAN_INTERVAL_MINUTES:-60}
-      # Sign-in account. If AUTH_PASSWORD is blank, a password is generated on the very first
-      # start and printed once to `docker compose logs`.
-      AUTH_USERNAME: ${AUTH_USERNAME:-admin}
-      AUTH_PASSWORD: ${AUTH_PASSWORD:-}
-      # Optional: blank means a secret is generated and kept in the database.
-      SESSION_SECRET: ${SESSION_SECRET:-}
-      # true when it sits behind a reverse proxy, so the sign-in lockout sees real addresses.
-      TRUST_PROXY: ${TRUST_PROXY:-false}
     volumes:
-      # Database, thumbnails and sessions. A named Docker volume by default; set DATA_HOST_DIR in
-      # .env to keep them in a folder on the host instead.
-      - ${DATA_HOST_DIR:-music-video-cataloguer-data}:/data
-      # Your videos, one subfolder per artist. Read-only: the app never changes them.
-      - ${LIBRARY_HOST_DIR:?Set LIBRARY_HOST_DIR in .env to your music video folder}:/videos:ro
+      # Database, thumbnails and sessions.
+      - ${CONFIGS}/music-video-cataloguer:/data
+      # Music videos, one subfolder per artist. Read-only: the app never changes them.
+      - ${MUSIC}/videos:/videos:ro
     ports:
-      - "${PORT:-3001}:3211"
+      - 3001:3211
     restart: unless-stopped
-
-volumes:
-  music-video-cataloguer-data:

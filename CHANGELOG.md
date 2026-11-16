@@ -7,6 +7,27 @@ restarted at v1.00; earlier changes are in [docs/HISTORY-before-1.00.md](docs/HI
 
 ## [Unreleased]
 
+## [1.01] - 2026-11-16
+
+### Changed
+- `docker-compose.yml` now fits a shared Docker setup: the app's settings come from its own
+  `.env` through `env_file` (`${ENV}/music-video-cataloguer/.env`), and the data and video
+  folders come from `CONFIGS` and `MUSIC` in the main `.env` next to the compose file (videos
+  are read from `${MUSIC}/videos`). It runs the published image; it no longer builds from
+  source (use `docker build -t jason4bury/music-video-cataloguer .` for that). Adds a
+  `home.group=Music` label.
+- The host port is fixed at 3001, and `PORT`, `LIBRARY_PATH`, `DATA_DIR` and `SCAN_ON_START`
+  inside the container are fixed in the compose file.
+
+- `.env.example` now holds only the settings the app reads: `SCAN_INTERVAL_MINUTES`, the
+  sign-in settings and `TRUST_PROXY`.
+
+### Removed
+- The `music-video-cataloguer-data` named volume.
+- `PORT`, `MUSIC_VIDEO_CATALOGUER_TAG`, `LIBRARY_HOST_DIR` and `DATA_HOST_DIR` from
+  `.env.example`: the port is fixed in the compose file and the folders come from the main
+  `.env`.
+
 ## [1.00] - 2026-11-07
 
 First release in the house style. Includes everything in the earlier history, plus:
