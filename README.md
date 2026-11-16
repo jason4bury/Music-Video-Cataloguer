@@ -54,7 +54,8 @@ The compose file is made for a shared Docker folder: one main `.env` next to `do
 ```
 ENV=E:/Docker/env          # folder holding one subfolder per app, each with its .env
 CONFIGS=E:/Docker/configs  # folder holding one data subfolder per app
-MUSIC=D:                   # music root```
+MUSIC=D:                   # music root
+```
 
 Compose reads `${...}` values only from that main `.env`, never from the app's own `.env`.
 
