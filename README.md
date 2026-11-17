@@ -98,6 +98,7 @@ All settings live in `.env` next to `docker-compose.yml`. `.env` is gitignored; 
 | `TRUST_PROXY` | | `true` behind a reverse proxy, so the lockout sees real client addresses |
 
 The account always matches `.env`: change `AUTH_USERNAME` or `AUTH_PASSWORD` and restart the container to change it in the app (everyone is signed out). The app refuses to start with an example password such as `changeme`, and says why in `docker compose logs music-video-cataloguer`.
+
 ### Where data is stored
 
 The database (`catalogue.db`: videos, tags, favourites, watched status, playlists and sessions) and the `thumbnails` folder are in the container's `/data` folder, which is the `music-video-cataloguer-data` Docker volume, or `DATA_HOST_DIR` if you set it. It survives rebuilds and updates. Back it up if you've spent time tagging: it's the only thing that can't be rebuilt from your video files. The app never writes to your video folder.
