@@ -1,26 +1,28 @@
+# Music Video Cataloguer. Copy .env.example to .env next to this file, fill it in, then run:
+#   docker compose up -d
+# Every ${VALUE} below comes from that .env, so .env is normally the only file you edit.
 services:
 
   music-video-cataloguer:
-    image: jason4bury/music-video-cataloguer
+    image: jason4bury/music-video-cataloguer:${MUSIC_VIDEO_CATALOGUER_TAG:-latest}
     container_name: music-video-cataloguer
-    labels:
-      - home.group=Music
-    # App settings come from E:\Docker_PC\env\music-video-cataloguer\.env:
-    # SCAN_INTERVAL_MINUTES, AUTH_USERNAME, AUTH_PASSWORD, SESSION_SECRET, TRUST_PROXY.
+    # Passes the app settings in .env (scan interval, sign-in, TRUST_PROXY) to the container.
     env_file:
-      - ${ENV}/music-video-cataloguer/.env
-    # Fixed container-side values. These override anything with the same name in the
-    # .env file.
+      - .env
+    # Fixed container-side values. These override anything with the same name in .env.
     environment:
       PORT: 3211
       LIBRARY_PATH: /videos
       DATA_DIR: /data
       SCAN_ON_START: "true"
     volumes:
-      # Database, thumbnails and sessions.
-      - ${CONFIGS}/music-video-cataloguer:/data
-      # Music videos, one subfolder per artist. Read-only: the app never changes them.
-      - ${MUSIC}/videos:/videos:ro
+      # Database, thumbnails and sessions. A named Docker volume unless DATA_HOST_DIR is set.
+      - ${DATA_HOST_DIR:-music-video-cataloguer-data}:/data
+      # Your music videos, one subfolder per artist. Read-only: the app never changes them.
+      - ${LIBRARY_HOST_DIR:?Set LIBRARY_HOST_DIR in .env to your music video folder}:/videos:ro
     ports:
-      - 3001:3211
+      - "${PORT:-3001}:3211"
     restart: unless-stopped
+
+volumes:
+  music-video-cataloguer-data:

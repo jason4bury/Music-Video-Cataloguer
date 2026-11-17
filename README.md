@@ -6,7 +6,7 @@
 
 A self-hosted web app for browsing, tagging and playing your music video collection, run in Docker.
 
-![Version](https://img.shields.io/badge/version-v1.01-blue)
+![Version](https://img.shields.io/badge/version-v1.02-blue)
 ![Platform](https://img.shields.io/badge/platform-Docker-2496ED?logo=docker&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-22-339933?logo=nodedotjs&logoColor=white)
 ![Licence](https://img.shields.io/badge/licence-MIT-green)
@@ -49,26 +49,16 @@ Music Video Cataloguer scans a folder of music videos (one subfolder per artist)
 
 ## 📦 Installation
 
-The compose file is made for a shared Docker folder: one main `.env` next to `docker-compose.yml` that names your folders, and a separate `.env` for each app. The main `.env` needs:
-
-```
-ENV=E:/Docker/env          # folder holding one subfolder per app, each with its .env
-CONFIGS=E:/Docker/configs  # folder holding one data subfolder per app
-MUSIC=D:                   # music root
-```
-
-Compose reads `${...}` values only from that main `.env`, never from the app's own `.env`.
-
-1. Put `docker-compose.yml` from this repository in your Docker folder (or add its `music-video-cataloguer` service to the compose file you already have), and set the three values above in the main `.env`. Your videos are read from `<MUSIC>/videos`; change that volume line if they're elsewhere.
-2. Copy `.env.example` to `<ENV>/music-video-cataloguer/.env` and set at least `AUTH_PASSWORD` (see Configuration below).
-3. Start it from the Docker folder:
+1. Put `docker-compose.yml` and `.env.example` from this repository in a folder on the Docker host (or clone the repository).
+2. Copy `.env.example` to `.env` in the same folder and set at least `LIBRARY_HOST_DIR` (your music video folder) and `AUTH_PASSWORD` (see Configuration below).
+3. Start it from that folder:
 
    ```
-   docker compose up -d music-video-cataloguer
+   docker compose up -d
    ```
 
    This pulls `jason4bury/music-video-cataloguer` from Docker Hub. To build the image yourself, run `docker build -t jason4bury/music-video-cataloguer .` in this repository first.
-4. Open `http://<your-server>:3001` and sign in. The first scan starts on its own.
+4. Open `http://<your-server>:3001` (or the `PORT` you set) and sign in. The first scan starts on its own.
 
 If you left `AUTH_PASSWORD` blank, the generated password is in `docker compose logs music-video-cataloguer`. It's only shown on the very first start.
 
@@ -89,14 +79,18 @@ The app can't see anything at the path you gave it. Check the mount from inside 
 docker compose exec music-video-cataloguer ls -la /videos
 ```
 
-If that's empty, check `MUSIC` in the main `.env` and the `/videos` volume line in `docker-compose.yml`. On Windows with Docker Desktop's older Hyper-V backend, also check the drive is shared under Settings > Resources > File sharing (the WSL 2 backend shares all drives).
+If that's empty, check `LIBRARY_HOST_DIR` in `.env`. On Windows with Docker Desktop's older Hyper-V backend, also check the drive is shared under Settings > Resources > File sharing (the WSL 2 backend shares all drives).
 
 ## ⚙️ Configuration
 
-The app's settings live in `<ENV>/music-video-cataloguer/.env`, which the compose file passes to the container with `env_file`. Keep it out of Git; `.env.example` shows every setting.
+All settings live in `.env` next to `docker-compose.yml`. `.env` is gitignored; `.env.example` shows every setting. Compose uses the port, tag and folder settings, and passes the rest to the app.
 
 | Setting | Required | What it does |
 | --- | --- | --- |
+| `PORT` | | Port on the host (default `3001`) |
+| `MUSIC_VIDEO_CATALOGUER_TAG` | | Image tag to run: `latest` (default) or a version such as `1.02` |
+| `LIBRARY_HOST_DIR` | Yes | Your music video folder on the host, mounted read-only |
+| `DATA_HOST_DIR` | | Host folder for the database and thumbnails. Blank uses the `music-video-cataloguer-data` Docker volume |
 | `SCAN_INTERVAL_MINUTES` | | Rescan interval in minutes (default `60`); `0` turns it off |
 | `AUTH_USERNAME` | | Sign-in username (default `admin`) |
 | `AUTH_PASSWORD` | | Sign-in password, at least 8 characters. Blank generates one on the first start |
@@ -104,12 +98,9 @@ The app's settings live in `<ENV>/music-video-cataloguer/.env`, which the compos
 | `TRUST_PROXY` | | `true` behind a reverse proxy, so the lockout sees real client addresses |
 
 The account always matches `.env`: change `AUTH_USERNAME` or `AUTH_PASSWORD` and restart the container to change it in the app (everyone is signed out). The app refuses to start with an example password such as `changeme`, and says why in `docker compose logs music-video-cataloguer`.
-
-The host port (`3001`), and `PORT`, `LIBRARY_PATH`, `DATA_DIR` and `SCAN_ON_START` inside the container, are fixed in `docker-compose.yml`. The video and data folders are set in the main `.env`, not here.
-
 ### Where data is stored
 
-The database (`catalogue.db`: videos, tags, favourites, watched status, playlists and sessions) and the `thumbnails` folder are in the container's `/data` folder, which is `<CONFIGS>/music-video-cataloguer` on the host. It survives rebuilds and updates. Back it up if you've spent time tagging: it's the only thing that can't be rebuilt from your video files. The app never writes to your video folder.
+The database (`catalogue.db`: videos, tags, favourites, watched status, playlists and sessions) and the `thumbnails` folder are in the container's `/data` folder, which is the `music-video-cataloguer-data` Docker volume, or `DATA_HOST_DIR` if you set it. It survives rebuilds and updates. Back it up if you've spent time tagging: it's the only thing that can't be rebuilt from your video files. The app never writes to your video folder.
 
 ### Putting it on the internet
 

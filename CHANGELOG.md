@@ -7,6 +7,20 @@ restarted at v1.00; earlier changes are in [docs/HISTORY-before-1.00.md](docs/HI
 
 ## [Unreleased]
 
+## [1.02] - 2026-11-17
+
+### Changed
+- `docker-compose.yml` and `.env.example` work for anyone again, with no shared Docker folder
+  needed: one `.env` next to the compose file holds the port, image tag, video and data folders
+  and app settings. Compose stops with a clear message if `LIBRARY_HOST_DIR` is missing.
+- The database and thumbnails go in the `music-video-cataloguer-data` Docker volume unless
+  `DATA_HOST_DIR` is set.
+- The image tag (`MUSIC_VIDEO_CATALOGUER_TAG`) and host port (`PORT`) can be set in `.env` again.
+
+### Removed
+- The `ENV`, `CONFIGS` and `MUSIC` variables from a shared main `.env`, and the `home.group`
+  label.
+
 ## [1.01] - 2026-11-16
 
 ### Changed
