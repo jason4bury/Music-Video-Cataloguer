@@ -1,12 +1,13 @@
-# Music Video Cataloguer. Copy .env.example to .env next to this file, fill it in, then run:
-#   docker compose up -d
-# Every ${VALUE} below comes from that .env, so .env is normally the only file you edit.
+# Music Video Cataloguer
+# 1. Change the music video folder path under "volumes" to your own folder.
+# 2. Copy .env.example to .env next to this file and fill it in.
+# 3. Run: docker compose up -d   then open http://<your-server>:3001
 services:
 
   music-video-cataloguer:
-    image: jason4bury/music-video-cataloguer:${MUSIC_VIDEO_CATALOGUER_TAG:-latest}
+    image: jason4bury/music-video-cataloguer:latest
     container_name: music-video-cataloguer
-    # Passes the app settings in .env (scan interval, sign-in, TRUST_PROXY) to the container.
+    # App settings (scan interval, sign-in, TRUST_PROXY) come from .env.
     env_file:
       - .env
     # Fixed container-side values. These override anything with the same name in .env.
@@ -16,12 +17,15 @@ services:
       DATA_DIR: /data
       SCAN_ON_START: "true"
     volumes:
-      # Database, thumbnails and sessions. A named Docker volume unless DATA_HOST_DIR is set.
-      - ${DATA_HOST_DIR:-music-video-cataloguer-data}:/data
+      # Database, thumbnails and sessions, in a Docker volume. To keep them in a folder instead,
+      # replace music-video-cataloguer-data with a path such as D:/Docker/music-video-cataloguer.
+      - music-video-cataloguer-data:/data
       # Your music videos, one subfolder per artist. Read-only: the app never changes them.
-      - ${LIBRARY_HOST_DIR:?Set LIBRARY_HOST_DIR in .env to your music video folder}:/videos:ro
+      # Windows: D:/Music Videos   Linux/NAS: /volume1/music-videos
+      - /path/to/music-videos:/videos:ro
     ports:
-      - "${PORT:-3001}:3211"
+      # Change the first number to use a different port on the host.
+      - "3001:3211"
     restart: unless-stopped
 
 volumes:

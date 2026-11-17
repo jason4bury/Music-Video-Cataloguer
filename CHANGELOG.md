@@ -7,6 +7,18 @@ restarted at v1.00; earlier changes are in [docs/HISTORY-before-1.00.md](docs/HI
 
 ## [Unreleased]
 
+## [1.03] - 2026-11-17
+
+### Changed
+- Your music video folder now goes straight into `docker-compose.yml` (replace the
+  `/path/to/music-videos` example), so it isn't set twice. `.env` holds only the app settings.
+- The host port is set in `docker-compose.yml` (`"3001:3211"`), and the compose file runs
+  `jason4bury/music-video-cataloguer:latest`.
+
+### Removed
+- `PORT`, `MUSIC_VIDEO_CATALOGUER_TAG`, `LIBRARY_HOST_DIR` and `DATA_HOST_DIR` from
+  `.env.example`.
+
 ## [1.02] - 2026-11-17
 
 ### Changed
