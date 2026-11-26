@@ -89,7 +89,7 @@ app.get('/healthz', health);
 app.get('/health', health);
 
 // Everything the sign-in page needs is reachable without a session.
-const OPEN_PATHS = new Set(['/login', '/api/login', '/favicon.ico', '/apple-touch-icon.png', '/icon-64.png']);
+const OPEN_PATHS = new Set(['/login', '/api/login', '/favicon.ico', '/apple-touch-icon.png', '/icon-64.png', '/look.js']);
 
 app.use((req, res, next) => {
   if (OPEN_PATHS.has(req.path)) return next();

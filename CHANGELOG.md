@@ -7,6 +7,29 @@ restarted at v1.00; earlier changes are in [docs/HISTORY-before-1.00.md](docs/HI
 
 ## [Unreleased]
 
+## [1.04] - 2026-11-26
+
+### Added
+- **▶ Play all** and **🔀 Shuffle** above the videos play everything shown (after any search,
+  filter or playlist) one after another. **Next** and **Back** under the player step through
+  the list; clicking a single video lets you step through the page too, but stops when it ends.
+- Fair shuffle: the least played videos come first, so everything gets a turn before anything
+  repeats, and the same artist isn't played twice in a row where that can be avoided.
+- Play counts. A video counts as played once it has run for 5 seconds, and the new
+  **Least played** sort shows the fewest plays (or longest ago) first. Existing databases get the
+  new columns on first start; nothing else changes.
+- The title and artist show on the video for a few seconds when it starts, **Up next** shows
+  what's coming, and a **Full screen** button (or double-click, or F) keeps the title on screen
+  in full screen, with the next title near the end of each video.
+- Keys while a video is open: Space or K pause, N next, B back, F full screen, M mute, the
+  arrows skip 10 seconds. Media keys on keyboards and headphones work in browsers that support
+  them, with the title and thumbnail shown in the system's media controls.
+- Videos that can't be played (missing file, or a format the browser can't show, including
+  sound with no picture) are skipped during Play all and Shuffle with a short notice.
+- **Help** (or ?) explains everything, including the keys.
+- **Look**: Dark (the usual look), Light, or System to follow the device. The sign-in page
+  follows it too. Saved in each browser.
+
 ## [1.03] - 2026-11-17
 
 ### Changed

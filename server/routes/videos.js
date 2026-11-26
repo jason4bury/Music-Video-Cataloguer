@@ -28,6 +28,8 @@ function serializeVideo(row) {
     favorite: !!row.favorite,
     watched: !!row.watched,
     addedAt: row.added_at,
+    playCount: row.play_count || 0,
+    lastPlayed: row.last_played || null,
     tags: row.tag_list ? row.tag_list.split(TAG_SEP) : [],
   };
 }
@@ -47,7 +49,7 @@ function getVideo(id) {
   return id ? db.prepare(`${SELECT_VIDEOS} WHERE v.id = ?`).get(id) : undefined;
 }
 
-// GET /api/videos?q=&artist=&tag=&favorite=1&watched=0&sort=artist|title|added|duration&dir=asc|desc&playlist=ID
+// GET /api/videos?q=&artist=&tag=&favorite=1&watched=0&sort=artist|title|added|duration|plays&dir=asc|desc&playlist=ID
 router.get('/videos', (req, res) => {
   const q = str(req.query.q).trim();
   const artist = str(req.query.artist);
@@ -56,7 +58,7 @@ router.get('/videos', (req, res) => {
   const watched = str(req.query.watched);
   const playlist = str(req.query.playlist);
   const sortKey = str(req.query.sort);
-  const sort = ['artist', 'title', 'added', 'duration'].includes(sortKey) ? sortKey : 'artist';
+  const sort = ['artist', 'title', 'added', 'duration', 'plays'].includes(sortKey) ? sortKey : 'artist';
   const dir = str(req.query.dir) === 'desc' ? 'DESC' : 'ASC';
   const sortCol = { artist: 'v.artist', title: 'v.title', added: 'v.added_at', duration: 'v.duration' }[sort];
 
@@ -87,8 +89,14 @@ router.get('/videos', (req, res) => {
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   // "Recently Added" means newest first unless a direction is asked for.
   const order = sort === 'added' && !req.query.dir ? 'DESC' : dir;
+  // "Least played" puts the fewest plays first, and of those the one played longest ago (never
+  // played counts as longest ago).
+  const orderBy =
+    sort === 'plays'
+      ? `v.play_count ${order}, COALESCE(v.last_played, '') ${order}`
+      : `${sortCol} COLLATE NOCASE ${order}`;
   const rows = db
-    .prepare(`${SELECT_VIDEOS} ${where} ORDER BY ${sortCol} COLLATE NOCASE ${order}, v.title COLLATE NOCASE ASC`)
+    .prepare(`${SELECT_VIDEOS} ${where} ORDER BY ${orderBy}, v.title COLLATE NOCASE ASC`)
     .all(params);
 
   res.json(rows.map(serializeVideo));
@@ -150,6 +158,15 @@ router.patch('/videos/:id', (req, res) => {
     })();
   }
 
+  res.json(serializeVideo(getVideo(row.id)));
+});
+
+// POST /api/videos/:id/played: counts one play (the player calls it once a video has run for
+// 5 seconds), for "Least played" and the fair shuffle.
+router.post('/videos/:id/played', (req, res) => {
+  const row = getVideo(videoId(req.params.id));
+  if (!row) return res.status(404).json({ error: 'not found' });
+  db.prepare("UPDATE videos SET play_count = play_count + 1, last_played = datetime('now') WHERE id = ?").run(row.id);
   res.json(serializeVideo(getVideo(row.id)));
 });
 

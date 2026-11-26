@@ -47,7 +47,27 @@
     aboutVersion: document.getElementById('aboutVersion'),
     aboutCopyright: document.getElementById('aboutCopyright'),
     aboutLink: document.getElementById('aboutLink'),
+    playerStage: document.getElementById('playerStage'),
+    nowOverlay: document.getElementById('nowOverlay'),
+    overlayLabel: document.getElementById('overlayLabel'),
+    overlayTitle: document.getElementById('overlayTitle'),
+    overlayArtist: document.getElementById('overlayArtist'),
+    skipNotice: document.getElementById('skipNotice'),
+    backBtn: document.getElementById('backBtn'),
+    nextBtn: document.getElementById('nextBtn'),
+    fullscreenBtn: document.getElementById('fullscreenBtn'),
+    queuePos: document.getElementById('queuePos'),
+    upNext: document.getElementById('upNext'),
+    playAllBtn: document.getElementById('playAllBtn'),
+    shuffleBtn: document.getElementById('shuffleBtn'),
+    helpBtn: document.getElementById('helpBtn'),
+    helpModal: document.getElementById('helpModal'),
+    closeHelp: document.getElementById('closeHelp'),
+    lookSelect: document.getElementById('lookSelect'),
   };
+
+  // The videos the grid is showing, in its order: what Play all, Shuffle and Next work through.
+  let lastVideos = [];
 
   let debounceTimer = null;
   function debounce(fn, ms) {
@@ -110,6 +130,9 @@
   }
 
   function renderGrid(videos) {
+    lastVideos = videos;
+    el.playAllBtn.disabled = videos.length === 0;
+    el.shuffleBtn.disabled = videos.length === 0;
     el.resultCount.textContent = `${videos.length} video${videos.length === 1 ? '' : 's'}`;
     el.emptyState.classList.toggle('hidden', videos.length > 0);
     el.grid.innerHTML = videos.map(cardHtml).join('');
@@ -276,14 +299,101 @@
   });
 
   // ---------- Modal / player ----------
-  // A video counts as watched once it has played for 5 seconds. One listener for the whole page,
-  // so closing a video early can't mark it watched later while a different one plays.
+  // What the player works through. Clicking a video queues the whole page (so Next and Back
+  // step through it) but stops when that video ends; Play all and Shuffle keep going.
+  const queue = {
+    items: [], // video objects from the grid
+    pos: -1,
+    autoAdvance: false,
+    failures: 0, // unplayable videos skipped in a row, so a list of nothing playable stops
+  };
+
+  // A video counts as played (and watched) once it has run for 5 seconds. One listener for the
+  // whole page, so closing a video early can't count it later while a different one plays.
   let autoMarkWatched = false;
+  let countPlay = false;
+  let upNextShownFor = null;
   el.player.addEventListener('timeupdate', () => {
-    if (!autoMarkWatched || el.player.currentTime <= 5 || !state.currentVideoId) return;
-    autoMarkWatched = false;
-    setWatched(state.currentVideoId, true).catch(reportError);
+    const id = state.currentVideoId;
+    if (!id) return;
+    const t = el.player.currentTime;
+    if (t > 5) {
+      if (countPlay) {
+        countPlay = false;
+        queue.failures = 0;
+        api(`/videos/${id}/played`, { method: 'POST' }).catch(() => {});
+      }
+      if (autoMarkWatched) {
+        autoMarkWatched = false;
+        setWatched(id, true).catch(reportError);
+      }
+    }
+    // In full screen, show what's next near the end of the video, as the Up next line is hidden.
+    const next = nextItem();
+    const left = el.player.duration - t;
+    if (queue.autoAdvance && next && isFullscreen() && left < 10 && left > 0 && upNextShownFor !== id) {
+      upNextShownFor = id;
+      showOverlay('Up next', next, 6000);
+    }
   });
+
+  el.player.addEventListener('ended', () => {
+    if (queue.autoAdvance) goNext(true);
+  });
+
+  // The file is missing or the browser can't read it. Skipped during Play all and Shuffle.
+  el.player.addEventListener('error', () => {
+    if (!state.currentVideoId || !el.player.getAttribute('src')) return;
+    handleUnplayable('it couldn’t be opened');
+  });
+
+  // Some formats (MKV, AVI, HEVC) open but only the sound plays. No picture counts as unplayable.
+  el.player.addEventListener('loadedmetadata', () => {
+    if (state.currentVideoId && el.player.videoWidth === 0 && el.player.videoHeight === 0) {
+      handleUnplayable('this browser can’t show its picture');
+    }
+  });
+
+  let skipTimer = null;
+  function handleUnplayable(why) {
+    const v = queue.items[queue.pos];
+    const name = v && v.title ? `${v.artist} – ${v.title}` : 'This video';
+    clearTimeout(skipTimer);
+    if (queue.autoAdvance && nextItem()) {
+      queue.failures++;
+      if (queue.failures >= queue.items.length) {
+        showSkipNotice('None of these videos can be played in this browser.', 0);
+        return;
+      }
+      showSkipNotice(`Skipped ${name}: ${why}.`);
+      el.player.pause();
+      skipTimer = setTimeout(() => goNext(true), 1500);
+    } else {
+      showSkipNotice(`Can’t play ${name}: ${why}. MP4 (H.264) and WebM play best.`, 0);
+    }
+  }
+
+  let noticeTimer = null;
+  function showSkipNotice(text, ms = 4000) {
+    el.skipNotice.textContent = text;
+    el.skipNotice.classList.remove('hidden');
+    clearTimeout(noticeTimer);
+    if (ms) noticeTimer = setTimeout(() => el.skipNotice.classList.add('hidden'), ms);
+  }
+  function hideSkipNotice() {
+    clearTimeout(noticeTimer);
+    el.skipNotice.classList.add('hidden');
+  }
+
+  let overlayTimer = null;
+  function showOverlay(label, v, ms = 5000) {
+    el.overlayLabel.textContent = label;
+    el.overlayTitle.textContent = v.title;
+    el.overlayArtist.textContent = v.artist;
+    el.nowOverlay.classList.add('visible');
+    clearTimeout(overlayTimer);
+    overlayTimer = setTimeout(() => el.nowOverlay.classList.remove('visible'), ms);
+  }
 
   async function setWatched(id, watched) {
     await api(`/videos/${id}`, { method: 'PATCH', body: JSON.stringify({ watched }) });
@@ -295,16 +405,76 @@
     btn.setAttribute('aria-pressed', String(on));
   }
 
-  async function openPlayer(id) {
+  function nextItem() {
+    return queue.items[queue.pos + 1] || null;
+  }
+
+  // Fair shuffle: fewest plays first (everything gets a turn before anything repeats), random
+  // within each play count, and the same artist not twice in a row where that can be helped.
+  function fairShuffle(videos) {
+    const groups = new Map();
+    for (const v of videos) {
+      const n = v.playCount || 0;
+      if (!groups.has(n)) groups.set(n, []);
+      groups.get(n).push(v);
+    }
+    const out = [];
+    for (const n of [...groups.keys()].sort((a, b) => a - b)) {
+      const g = groups.get(n);
+      for (let i = g.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [g[i], g[j]] = [g[j], g[i]];
+      }
+      for (let i = 0; i < g.length; i++) {
+        const prev = i > 0 ? g[i - 1] : out[out.length - 1];
+        if (prev && g[i].artist === prev.artist) {
+          const k = g.findIndex((x, idx) => idx > i && x.artist !== prev.artist);
+          if (k !== -1) [g[i], g[k]] = [g[k], g[i]];
+        }
+      }
+      out.push(...g);
+    }
+    return out;
+  }
+
+  function startQueue(videos, startIndex, autoAdvance) {
+    if (!videos.length) return;
+    queue.items = videos.slice();
+    queue.autoAdvance = autoAdvance;
+    queue.failures = 0;
+    playAt(startIndex);
+  }
+
+  let playSeq = 0;
+  async function playAt(pos) {
+    const item = queue.items[pos];
+    if (!item) return;
+    const seq = ++playSeq;
     let v;
     try {
-      v = await api(`/videos/${id}`);
+      v = await api(`/videos/${item.id}`);
     } catch (err) {
+      if (seq !== playSeq) return;
+      if (err.status === 404 && queue.autoAdvance && queue.items[pos + 1]) {
+        // Removed by a scan since the page was drawn: move on.
+        queue.pos = pos;
+        return goNext(true);
+      }
       return reportError(err);
     }
-    state.currentVideoId = id;
+    if (seq !== playSeq) return; // a quicker Next/Back press got there first
+    queue.pos = pos;
+    queue.items[pos] = v;
+    clearTimeout(skipTimer);
+    hideSkipNotice();
+    state.currentVideoId = v.id;
     autoMarkWatched = !v.watched;
-    el.player.src = `/api/videos/${id}/stream`;
+    countPlay = true;
+    upNextShownFor = null;
+    el.player.src = `/api/videos/${v.id}/stream`;
+    el.player.play().catch(() => {
+      // Autoplay can be blocked until the page has been clicked; the play button still works.
+    });
     el.modalTitle.textContent = v.title;
     el.modalArtist.textContent = v.artist;
     setPressed(el.modalFav, v.favorite);
@@ -312,8 +482,96 @@
     renderModalTags(v.tags);
     el.playlistAddStatus.textContent = '';
     updateRemoveFromPlaylist(v.playlists || []);
-    el.modal.classList.remove('hidden');
-    el.closeModal.focus();
+    updateTransport();
+    updateMediaSession(v);
+    showOverlay(queue.autoAdvance && queue.items.length > 1 ? 'Now playing' : '', v);
+    if (el.modal.classList.contains('hidden')) {
+      el.modal.classList.remove('hidden');
+      el.playerStage.focus();
+    }
+  }
+
+  function updateTransport() {
+    const n = queue.items.length;
+    const next = nextItem();
+    el.queuePos.textContent = n > 1 ? `${queue.pos + 1} of ${n}` : '';
+    el.nextBtn.disabled = !next;
+    if (next) {
+      el.upNext.innerHTML = `Up next: <b>${escapeHtml(next.title)}</b> – ${escapeHtml(next.artist)}`;
+    } else {
+      el.upNext.textContent = queue.autoAdvance && n > 1 ? 'Last video in the list' : '';
+    }
+  }
+
+  function goNext(auto) {
+    if (nextItem()) return playAt(queue.pos + 1);
+    if (auto) showSkipNotice('That was the last video in the list.', 0);
+  }
+
+  // Back starts the video again, or goes to the previous one if it's within 3 seconds of the start.
+  function goBack() {
+    if (el.player.currentTime > 3 || queue.pos <= 0) {
+      el.player.currentTime = 0;
+      el.player.play().catch(() => {});
+      return;
+    }
+    playAt(queue.pos - 1);
+  }
+
+  function isFullscreen() {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement);
+  }
+
+  function exitFullscreen() {
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    if (exit) Promise.resolve(exit.call(document)).catch(() => {});
+  }
+
+  function toggleFullscreen() {
+    if (isFullscreen()) return exitFullscreen();
+    const stage = el.playerStage;
+    if (stage.requestFullscreen) stage.requestFullscreen().catch(() => {});
+    else if (stage.webkitRequestFullscreen) stage.webkitRequestFullscreen();
+    // iPhone has no full screen for page elements, only for the video itself.
+    else if (el.player.webkitEnterFullscreen) el.player.webkitEnterFullscreen();
+  }
+
+  function onFullscreenChange() {
+    el.fullscreenBtn.textContent = isFullscreen() ? '⛶ Exit full screen' : '⛶ Full screen';
+    if (!el.modal.classList.contains('hidden')) el.playerStage.focus();
+  }
+  document.addEventListener('fullscreenchange', onFullscreenChange);
+  document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+
+  // Media keys on keyboards and headphones, and the lock screen / notification controls.
+  const media = 'mediaSession' in navigator ? navigator.mediaSession : null;
+  function updateMediaSession(v) {
+    if (!media || typeof MediaMetadata === 'undefined') return;
+    const artwork = v.thumbnail ? [{ src: v.thumbnail, sizes: '480x270', type: 'image/jpeg' }] : [];
+    media.metadata = new MediaMetadata({ title: v.title, artist: v.artist, album: 'Music Video Cataloguer', artwork });
+  }
+  if (media) {
+    const handlers = {
+      play: () => el.player.play().catch(() => {}),
+      pause: () => el.player.pause(),
+      previoustrack: () => state.currentVideoId && goBack(),
+      nexttrack: () => state.currentVideoId && goNext(false),
+      seekbackward: () => (el.player.currentTime = Math.max(0, el.player.currentTime - 10)),
+      seekforward: () => (el.player.currentTime = el.player.currentTime + 10),
+    };
+    for (const [action, fn] of Object.entries(handlers)) {
+      try {
+        media.setActionHandler(action, fn);
+      } catch {
+        // this browser doesn't offer that action
+      }
+    }
+  }
+
+  function openPlayer(id) {
+    const pos = lastVideos.findIndex((v) => v.id === id);
+    if (pos === -1) startQueue([{ id }], 0, false);
+    else startQueue(lastVideos, pos, false);
   }
 
   // When the grid is showing a playlist, the player offers to take the video out of it again.
@@ -344,6 +602,8 @@
   }
 
   function closePlayer() {
+    if (isFullscreen()) exitFullscreen();
+    playSeq++;
     el.modal.classList.add('hidden');
     el.player.pause();
     // removeAttribute + load() stops the download; setting src to '' makes the browser request
@@ -352,6 +612,14 @@
     el.player.load();
     state.currentVideoId = null;
     autoMarkWatched = false;
+    countPlay = false;
+    clearTimeout(skipTimer);
+    clearTimeout(overlayTimer);
+    el.nowOverlay.classList.remove('visible');
+    hideSkipNotice();
+    queue.items = [];
+    queue.pos = -1;
+    if (media) media.metadata = null;
     refresh();
   }
 
@@ -359,10 +627,73 @@
   el.modal.addEventListener('click', (e) => {
     if (e.target === el.modal) closePlayer();
   });
+  el.backBtn.addEventListener('click', goBack);
+  el.nextBtn.addEventListener('click', () => goNext(false));
+  el.fullscreenBtn.addEventListener('click', toggleFullscreen);
+  el.playerStage.addEventListener('dblclick', (e) => {
+    e.preventDefault();
+    toggleFullscreen();
+  });
+
+  el.playAllBtn.addEventListener('click', () => startQueue(lastVideos, 0, true));
+  el.shuffleBtn.addEventListener('click', () => startQueue(fairShuffle(lastVideos), 0, true));
+
+  function isTyping(t) {
+    return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+  }
+
   document.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape') return;
-    if (!el.aboutModal.classList.contains('hidden')) closeAbout();
-    else if (!el.modal.classList.contains('hidden')) closePlayer();
+    if (e.key === 'Escape') {
+      // The browser uses Esc to leave full screen; only close things when not in full screen.
+      if (isFullscreen()) return;
+      if (!el.helpModal.classList.contains('hidden')) closeHelp();
+      else if (!el.aboutModal.classList.contains('hidden')) closeAbout();
+      else if (!el.modal.classList.contains('hidden')) closePlayer();
+      return;
+    }
+    if (e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return;
+    if (e.key === '?') {
+      if (el.aboutModal.classList.contains('hidden')) openHelp();
+      return;
+    }
+    const playerOpen =
+      !el.modal.classList.contains('hidden') && el.helpModal.classList.contains('hidden') && el.aboutModal.classList.contains('hidden');
+    if (!playerOpen) return;
+    // The video's own controls already handle Space and the arrows when they have focus.
+    const onVideo = e.target === el.player;
+    const onButton = e.target.tagName === 'BUTTON';
+    switch (e.key.toLowerCase()) {
+      case ' ':
+      case 'k':
+        if (onVideo || (onButton && e.key === ' ')) return;
+        e.preventDefault();
+        if (el.player.paused) el.player.play().catch(() => {});
+        else el.player.pause();
+        break;
+      case 'n':
+        goNext(false);
+        break;
+      case 'b':
+        goBack();
+        break;
+      case 'f':
+        toggleFullscreen();
+        break;
+      case 'm':
+        el.player.muted = !el.player.muted;
+        break;
+      case 'arrowleft':
+        if (onVideo) return;
+        e.preventDefault();
+        el.player.currentTime = Math.max(0, el.player.currentTime - 10);
+        break;
+      case 'arrowright':
+        if (onVideo) return;
+        e.preventDefault();
+        el.player.currentTime = el.player.currentTime + 10;
+        break;
+      default:
+    }
   });
 
   el.modalFav.addEventListener('click', async () => {
@@ -447,6 +778,33 @@
   el.closeAbout.addEventListener('click', closeAbout);
   el.aboutModal.addEventListener('click', (e) => {
     if (e.target === el.aboutModal) closeAbout();
+  });
+
+  // ---------- Help ----------
+  function openHelp() {
+    el.helpModal.classList.remove('hidden');
+    el.closeHelp.focus();
+  }
+  function closeHelp() {
+    el.helpModal.classList.add('hidden');
+    if (!el.modal.classList.contains('hidden')) el.playerStage.focus();
+  }
+  el.helpBtn.addEventListener('click', openHelp);
+  el.closeHelp.addEventListener('click', closeHelp);
+  el.helpModal.addEventListener('click', (e) => {
+    if (e.target === el.helpModal) closeHelp();
+  });
+
+  // ---------- Look (light / dark) ----------
+  el.lookSelect.value = document.documentElement.getAttribute('data-look') || 'dark';
+  el.lookSelect.addEventListener('change', () => {
+    const look = el.lookSelect.value;
+    document.documentElement.setAttribute('data-look', look);
+    try {
+      localStorage.setItem('mvc.look', look);
+    } catch {
+      // storage blocked: the look still changes for this visit
+    }
   });
 
   // ---------- Top controls ----------

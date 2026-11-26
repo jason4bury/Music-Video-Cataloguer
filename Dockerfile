@@ -1,4 +1,4 @@
-# Music Video Cataloguer v1.03. Build with: docker build -t jason4bury/music-video-cataloguer:1.03 .
+# Music Video Cataloguer v1.04. Build with: docker build -t jason4bury/music-video-cataloguer:1.04 .
 # Node.js is pinned to an exact version so every build is the same; bump it here on purpose.
 ARG NODE_IMAGE=node:22.23.4-bookworm-slim
 
@@ -15,7 +15,7 @@ RUN npm ci --omit=dev
 FROM ${NODE_IMAGE}
 LABEL org.opencontainers.image.title="Music Video Cataloguer" \
       org.opencontainers.image.description="Self-hosted web app for cataloguing, tagging and playing a music video collection" \
-      org.opencontainers.image.version="1.03" \
+      org.opencontainers.image.version="1.04" \
       org.opencontainers.image.source="https://github.com/jason4bury/Music-Video-Cataloguer" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.authors="Jason Rhodes"

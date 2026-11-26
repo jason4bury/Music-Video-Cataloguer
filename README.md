@@ -6,7 +6,7 @@
 
 A self-hosted web app for browsing, tagging and playing your music video collection, run in Docker.
 
-![Version](https://img.shields.io/badge/version-v1.03-blue)
+![Version](https://img.shields.io/badge/version-v1.04-blue)
 ![Platform](https://img.shields.io/badge/platform-Docker-2496ED?logo=docker&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-22-339933?logo=nodedotjs&logoColor=white)
 ![Licence](https://img.shields.io/badge/licence-MIT-green)
@@ -21,6 +21,11 @@ Music Video Cataloguer scans a folder of music videos (one subfolder per artist)
 - **Thumbnails and lengths** from ffmpeg and ffprobe (included in the Docker image). A replaced or re-encoded video gets a new thumbnail on the next scan.
 - **Search and filters**: search by artist or title, filter by artist, tag, playlist or favourites, and sort by artist, title, recently added or length.
 - **Player**: streams in the browser with proper seeking. A video counts as watched after 5 seconds, or tick Watched yourself.
+- **Play all and Shuffle**: play everything shown, one after another, with Next and Back. The shuffle is fair: least played first, and not the same artist twice in a row where that can be avoided. Videos that can't be played are skipped.
+- **Title on screen, Up next and full screen**: the title shows on the video as it starts, Up next shows what's coming, and full screen keeps both.
+- **Keyboard and media keys**: Space, N, B, F, M and the arrows, plus the play/pause, next and previous keys on keyboards and headphones.
+- **Least played**: play counts are kept, and the Least played sort shows what hasn't had a turn.
+- **Help and Look**: a Help page with all the keys, and a Dark, Light or System look.
 - **Tags and favourites** on every video.
 - **Playlists**: create and delete them, add a video from the "+" on its thumbnail or from the player, and remove it again from the player while viewing that playlist.
 - **Sign-in**: one account from `.env`, sessions that survive a restart, and a lockout after 10 wrong passwords in 15 minutes.
@@ -69,9 +74,12 @@ If you left `AUTH_PASSWORD` blank, the generated password is in `docker compose 
 
 ## 🚀 Usage
 
-- Click a video to play it. Favourite, Watched, tags and "Add to playlist" are under the player.
+- Click a video to play it. Favourite, Watched, tags and "Add to playlist" are under the player. **Next** and **Back** step through the videos on the page.
+- **▶ Play all** plays every video shown, in order; **🔀 Shuffle** plays them in a fair shuffle. Filter first (an artist, tag, playlist or favourites) to play just those.
+- While a video is open: <kbd>Space</kbd> or <kbd>K</kbd> pause, <kbd>N</kbd> next, <kbd>B</kbd> back, <kbd>F</kbd> full screen, <kbd>M</kbd> mute, <kbd>←</kbd> <kbd>→</kbd> 10 seconds, <kbd>Esc</kbd> close.
 - The **+** on a thumbnail adds the video to a playlist without opening it.
 - Click an artist, tag or playlist in the sidebar to filter; click the artist or tag again to clear it.
+- **Help** (or <kbd>?</kbd>) explains everything. **Look** switches between Dark, Light and System.
 - **About** shows the version, licence and a link to this repository.
 
 ### If a scan finds no videos
@@ -118,14 +126,14 @@ Install Node.js 22+ and ffmpeg, run `npm ci --omit=dev`, set `LIBRARY_PATH` and 
 server/
   index.js               Express app, start-up checks, sessions, security headers
   auth.js                sign-in account, sign-in and lockout
-  db.js                  SQLite schema
+  db.js                  SQLite schema (adds new columns to older databases)
   scanner.js             scans the library, ffprobe lengths and ffmpeg thumbnails
   sqliteSessionStore.js  keeps sessions in SQLite
   version.js             shows package.json's version as v1.00
   routes/videos.js       videos, artists, tags, streaming and scan endpoints
   routes/playlists.js    playlist endpoints
   routes/mime.js         video content types
-public/                  the browser app (index.html, login.html, app.js, style.css, icons)
+public/                  the browser app (index.html, login.html, app.js, look.js, style.css, icons)
 assets/                  icon and README image
 docs/                    history before v1.00
 ```

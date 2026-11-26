@@ -6,6 +6,7 @@
 <title>Music Video Cataloguer</title>
 <link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48" />
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<script src="look.js"></script>
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -17,6 +18,15 @@
       </div>
       <div class="topbar-actions">
         <button id="favToggle" class="chip-toggle" title="Show only favourites" aria-pressed="false">★ Favourites</button>
+        <label class="look-label" title="Light or dark look">
+          Look
+          <select id="lookSelect" aria-label="Look">
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+            <option value="system">System</option>
+          </select>
+        </label>
+        <button id="helpBtn" title="How to use Music Video Cataloguer (?)">Help</button>
         <button id="aboutBtn" title="About Music Video Cataloguer">About</button>
         <button id="logoutBtn" title="Sign out">⏻ Sign out</button>
       </div>
@@ -58,7 +68,11 @@
 
       <main>
         <div class="toolbar">
-          <span id="resultCount" class="result-count"></span>
+          <div class="toolbar-left">
+            <button id="playAllBtn" class="play-btn" title="Play every video shown, in this order">▶ Play all</button>
+            <button id="shuffleBtn" class="play-btn" title="Play every video shown in a fair shuffle: least played first, no artist twice in a row where it can be helped">🔀 Shuffle</button>
+            <span id="resultCount" class="result-count"></span>
+          </div>
           <label class="sort-label">
             Sort
             <select id="sortSelect">
@@ -66,6 +80,7 @@
               <option value="title">Title</option>
               <option value="added">Recently Added</option>
               <option value="duration">Duration</option>
+              <option value="plays">Least played</option>
             </select>
           </label>
         </div>
@@ -78,7 +93,22 @@
   <div id="playerModal" class="modal hidden">
     <div class="modal-content">
       <button id="closeModal" class="modal-close" title="Close" aria-label="Close">✕</button>
-      <video id="player" controls></video>
+      <div id="playerStage" class="player-stage" tabindex="-1">
+        <video id="player" controls controlsList="nofullscreen" playsinline></video>
+        <div id="nowOverlay" class="now-overlay" aria-hidden="true">
+          <div id="overlayLabel" class="overlay-label"></div>
+          <div id="overlayTitle" class="overlay-title"></div>
+          <div id="overlayArtist" class="overlay-artist"></div>
+        </div>
+        <div id="skipNotice" class="skip-notice hidden" role="status"></div>
+      </div>
+      <div class="transport">
+        <button id="backBtn" title="Back: start again, or the previous video if near the start (B)">⏮ Back</button>
+        <button id="nextBtn" title="Next video (N)">Next ⏭</button>
+        <button id="fullscreenBtn" title="Full screen (F)">⛶ Full screen</button>
+        <span id="queuePos" class="queue-pos"></span>
+        <span id="upNext" class="up-next"></span>
+      </div>
       <div class="modal-info">
         <div class="modal-title-row">
           <div>
@@ -107,6 +137,41 @@
           <button id="removeFromPlaylistBtn" class="hidden"></button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div id="helpModal" class="modal hidden">
+    <div class="modal-content help-content" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+      <button id="closeHelp" class="modal-close" title="Close" aria-label="Close">✕</button>
+      <h2 id="helpTitle">Help</h2>
+
+      <h3>Finding videos</h3>
+      <p>Search by artist or title at the top. Click an artist, tag or playlist on the left to filter, and click it again to clear it. <b>★ Favourites</b> shows only your favourites. <b>Sort</b> changes the order, and <b>Least played</b> puts the videos you've played least (or longest ago) first.</p>
+
+      <h3>Playing</h3>
+      <p>Click a video to play it. <b>Next</b> and <b>Back</b> step through the videos shown on the page.</p>
+      <p><b>▶ Play all</b> plays every video shown, in the order shown, one after another. <b>🔀 Shuffle</b> plays them in a fair shuffle: the least played come first, so everything gets a turn before anything repeats, and the same artist isn't played twice in a row where that can be avoided. Filter first (an artist, tag, playlist or favourites) to play just those.</p>
+      <p>The title shows on the video for a few seconds when it starts, and <b>Up next</b> shows what's coming. In full screen the next title also appears near the end of each video.</p>
+      <p>If a video can't be played (the file has gone, or the browser can't show its format), it's skipped during Play all and Shuffle. MP4 (H.264) and WebM play best.</p>
+      <p>A video counts as played, and as watched, once it has run for 5 seconds.</p>
+
+      <h3>Keys while a video is open</h3>
+      <table class="keys">
+        <tr><td><kbd>Space</kbd> or <kbd>K</kbd></td><td>Pause or play</td></tr>
+        <tr><td><kbd>N</kbd></td><td>Next video</td></tr>
+        <tr><td><kbd>B</kbd></td><td>Back (start again, or the previous video if near the start)</td></tr>
+        <tr><td><kbd>F</kbd></td><td>Full screen on or off</td></tr>
+        <tr><td><kbd>M</kbd></td><td>Mute on or off</td></tr>
+        <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Back or forward 10 seconds</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>Leave full screen, then close the player</td></tr>
+      </table>
+      <p>The media keys on your keyboard or headphones (play/pause, next, previous) work too, in browsers that support them.</p>
+
+      <h3>Tags, favourites and playlists</h3>
+      <p>Under the player you can mark a favourite, tick Watched, add or remove tags, and add the video to a playlist. The <b>+</b> on a thumbnail adds a video to a playlist without opening it. While a playlist is shown, the player can take the video out of it again.</p>
+
+      <h3>Look</h3>
+      <p><b>Look</b> at the top switches between Dark (the usual look), Light, and System (follows your device). This browser remembers the choice.</p>
     </div>
   </div>
 

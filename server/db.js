@@ -70,4 +70,9 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_video_tags_tag ON video_tags(tag_id);
 `);
 
+// Columns added after v1.00. Older databases get them on first start; nothing else changes.
+const videoColumns = new Set(db.prepare('PRAGMA table_info(videos)').all().map((c) => c.name));
+if (!videoColumns.has('play_count')) db.exec('ALTER TABLE videos ADD COLUMN play_count INTEGER NOT NULL DEFAULT 0');
+if (!videoColumns.has('last_played')) db.exec('ALTER TABLE videos ADD COLUMN last_played TEXT');
+
 module.exports = { db, DATA_DIR, THUMB_DIR };

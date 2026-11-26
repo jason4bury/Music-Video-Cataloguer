@@ -6,6 +6,7 @@
 <title>Sign in: Music Video Cataloguer</title>
 <link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48" />
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<script src="look.js"></script>
 <style>
   :root {
     --bg: #15130f;
@@ -20,6 +21,33 @@
     --radius: 3px;
     --font-display: 'Arial Narrow', 'Helvetica Neue Condensed', Impact, sans-serif;
     --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+  /* Light look, if chosen with Look in the app (saved in this browser). */
+  :root[data-look="light"] {
+    --bg: #f4efe5;
+    --surface: #fffcf6;
+    --surface-raised: #ede6d8;
+    --border: #d6ccb8;
+    --text: #221e17;
+    --text-dim: #5a5143;
+    --amber: #b8741a;
+    --amber-dim: #8c5a18;
+    --red: #b3392d;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: light) {
+    :root[data-look="system"] {
+      --bg: #f4efe5;
+      --surface: #fffcf6;
+      --surface-raised: #ede6d8;
+      --border: #d6ccb8;
+      --text: #221e17;
+      --text-dim: #5a5143;
+      --amber: #b8741a;
+      --amber-dim: #8c5a18;
+      --red: #b3392d;
+      color-scheme: light;
+    }
   }
   * { box-sizing: border-box; }
   body {
